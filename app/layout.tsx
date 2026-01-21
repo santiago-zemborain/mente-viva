@@ -37,13 +37,26 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Mente Viva - Espacio de Salud Cognitiva",
-    description: "Promovemos la salud cognitiva desde una mirada global y humana.",
+    description: "Promovemos la salud cognitiva desde una mirada global y humana. Talleres de memoria, estimulación cognitiva y terapia ocupacional en Buenos Aires.",
     url: "https://menteviva.com.ar",
     siteName: "Mente Viva",
     locale: "es_AR",
     type: "website",
+    images: [
+      {
+        url: "https://menteviva.com.ar/images/logo-20mente-20viva-20espacio.png",
+        width: 1563,
+        height: 1563,
+        alt: "Mente Viva - Espacio de Salud Cognitiva",
+      },
+    ],
   },
-  generator: 'v0.app'
+  twitter: {
+    card: "summary_large_image",
+    title: "Mente Viva - Espacio de Salud Cognitiva",
+    description: "Promovemos la salud cognitiva desde una mirada global y humana.",
+    images: ["https://menteviva.com.ar/images/logo-20mente-20viva-20espacio.png"],
+  },
 }
 
 export const viewport: Viewport = {

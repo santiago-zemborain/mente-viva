@@ -203,7 +203,7 @@ export default async function HomePage() {
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="w-full text-base bg-transparent sm:text-lg">
-                  <Link href="/taller-de-memoria/inscripcion?dia=miercoles&hora=11:00">
+                  <Link href="/taller-de-memoria/inscripcion">
                     Ya asistí: Reservar mi lugar
                     <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                   </Link>

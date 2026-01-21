@@ -60,7 +60,7 @@ export const revalidate = 3600 // 1 hora
 
 export default async function TallerDeMemoriaPage() {
   const supabase = await createClient()
-  
+
   // Obtener precio del producto monthly
   const { data: monthlyProduct } = await supabase
     .from("products")
@@ -68,7 +68,7 @@ export default async function TallerDeMemoriaPage() {
     .eq("type", "monthly")
     .eq("is_active", true)
     .single()
-  
+
   const price = monthlyProduct?.price ? Number(monthlyProduct.price) : 25000
 
   return (
@@ -143,18 +143,26 @@ export default async function TallerDeMemoriaPage() {
                   ))}
                 </ul>
               </div>
-              <Button asChild size="lg" className="w-full text-base sm:text-lg">
-                <Link href="/taller-de-memoria/entrevista">
-                  Soy nuevo/a: Agendar Entrevista
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                </Link>
-              </Button>
-              <p className="mt-3 text-center text-xs text-muted-foreground sm:mt-4 sm:text-sm">
+              <div className="flex flex-col gap-2">
+                <Button asChild size="lg" className="w-full text-base sm:text-lg">
+                  <Link href="/taller-de-memoria/entrevista">
+                    Soy nuevo/a: Agendar Entrevista
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="w-full text-base bg-transparent sm:text-lg">
+                  <Link href="/taller-de-memoria/inscripcion">
+                    Ya asistí: Reservar mi lugar
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  </Link>
+                </Button>
+              </div>
+              {/* <p className="mt-3 text-center text-xs text-muted-foreground sm:mt-4 sm:text-sm">
                 Si ya tenés tu entrevista aprobada,{" "}
                 <Link href="/taller-de-memoria/reservar" className="font-medium text-primary hover:underline">
                   reservá tu clase acá
                 </Link>
-              </p>
+              </p> */}
             </div>
           </div>
         </div>
