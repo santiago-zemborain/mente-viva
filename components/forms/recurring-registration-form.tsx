@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -119,8 +119,6 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
     fetchPrices()
   }, [supabase])
 
-  console.log("monthlyPrice", monthlyPrice)
-
   const availableNonHoliday = useMemo(() => {
     return availableDates.filter((d) => !d.isHoliday)
   }, [availableDates])
@@ -128,32 +126,6 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
   const isFullMonth = selectedDates.length === availableNonHoliday.length && availableNonHoliday.length > 0
 
   const paymentMode = isFullMonth && userSelectedMonthly ? "monthly" : "single"
-
-  const getMonthDates = useCallback((targetWeekday: number, holidayMap: Record<string, string>): ClassDate[] => {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth()
-    const today = now.getDate()
-
-    const dates: ClassDate[] = []
-    const lastDay = new Date(year, month + 1, 0).getDate()
-
-    for (let day = 1; day <= lastDay; day++) {
-      const date = new Date(year, month, day)
-      if (date.getDay() === targetWeekday && day >= today) {
-        const dateString = date.toISOString().split("T")[0]
-        const isHoliday = dateString in holidayMap
-        dates.push({
-          date,
-          dateString,
-          isHoliday,
-          holidayLabel: holidayMap[dateString],
-        })
-      }
-    }
-
-    return dates
-  }, [])
 
   useEffect(() => {
     if (!selectedDay) {
@@ -163,62 +135,82 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
 
     let isMounted = true
 
-    async function loadHolidays() {
-      const { data } = await supabase.from("holidays").select("date, label").eq("is_active", true)
-
+    async function loadData() {
+      // 1. Feriados para marcar en las fechas
+      const { data: holidaysData } = await supabase.from("holidays").select("date, label").eq("is_active", true)
       if (!isMounted) return
 
       const holidayMap: Record<string, string> = {}
-      data?.forEach((h) => {
+      holidaysData?.forEach((h) => {
         holidayMap[h.date] = h.label || "Feriado"
       })
 
-      const dates = getMonthDates(weekday, holidayMap)
-      setAvailableDates(dates)
+      // 2. Rango del mes actual
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = now.getMonth()
+      const firstDay = new Date(year, month, 1).toISOString().split("T")[0]
+      const lastDay = new Date(year, month + 1, 0).toISOString().split("T")[0]
+      const todayStr = now.toISOString().split("T")[0]
 
-      // Cargar productos individuales de las clases disponibles
-      // Filtrar por fecha, weekday y time usando schedules
-      const dateStrings = dates.map(d => d.dateString)
-      if (dateStrings.length > 0) {
-        const { data: products } = await supabase
-          .from("products")
-          .select(`
-            id, 
-            price, 
-            monthly_price, 
-            month_label,
-            schedules!inner(weekday, time_slot, specific_date)
-          `)
-          .eq("type", "monthly")
-          .eq("is_active", true)
-          .in("month_label", dateStrings)
+      // 3. Lista de clases = solo tabla products, mes actual
+      const { data: products } = await supabase
+        .from("products")
+        .select("id, price, monthly_price, month_label")
+        .eq("type", "monthly")
+        .eq("is_active", true)
+        .gte("month_label", firstDay)
+        .lte("month_label", lastDay)
 
-        if (products && isMounted) {
-          const productMap = new Map<string, { id: string; price: number; monthly_price: number | null }>()
-          products.forEach(p => {
-            // Filtrar por weekday y time en el schedule
-            const schedule = Array.isArray(p.schedules) ? p.schedules[0] : p.schedules
-            if (p.month_label && schedule && schedule.weekday === weekday && schedule.time_slot === time) {
-              productMap.set(p.month_label, {
-                id: p.id,
-                price: Number(p.price),
-                monthly_price: p.monthly_price ? Number(p.monthly_price) : null
-              })
-            }
+      if (!isMounted) return
+
+      const productMap = new Map<string, { id: string; price: number; monthly_price: number | null }>()
+      const classDates: ClassDate[] = []
+
+      if (products) {
+        products.forEach((p) => {
+          if (!p.month_label) return
+
+          const dateString = p.month_label
+          const dateObj = new Date(dateString + "T12:00:00")
+          // Solo mostrar las del día seleccionado (miércoles o viernes)
+          if (dateObj.getDay() !== weekday) return
+
+          const isHoliday = dateString in holidayMap
+
+          productMap.set(dateString, {
+            id: p.id,
+            price: Number(p.price),
+            monthly_price: p.monthly_price ? Number(p.monthly_price) : null,
           })
-          setClassProducts(productMap)
-        }
+
+          // Solo mostrar fechas de hoy en adelante (no clases pasadas)
+          if (dateString >= todayStr) {
+            classDates.push({
+              date: dateObj,
+              dateString,
+              isHoliday,
+              holidayLabel: holidayMap[dateString],
+            })
+          }
+        })
       }
 
+      classDates.sort((a, b) => a.date.getTime() - b.date.getTime())
+
+      if (isMounted) {
+        setAvailableDates(classDates)
+        setClassProducts(productMap)
+      }
       setIsLoading(false)
     }
 
-    loadHolidays()
+    loadData()
 
     return () => {
       isMounted = false
     }
-  }, [weekday, supabase, getMonthDates, selectedDay])
+  }, [weekday, time, supabase, selectedDay])
 
   function handleDaySelection(day: "miercoles" | "viernes") {
     setSelectedDay(day)
@@ -1128,10 +1120,10 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
             <h4 className="font-semibold text-foreground">2. Valores y formas de pago</h4>
             <ul className="list-disc pl-5 space-y-1">
               <li>
-                Pack mensual (todas las clases del mes): <strong>{formatPrice(monthlyPrice)}</strong> por clase.
+                Pack mensual (todas las clases del mes): <strong>{(monthlyPrice)}</strong> por clase.
               </li>
               <li>
-                Clases sueltas: <strong>{formatPrice(singlePrice)}</strong> por clase.
+                Clases sueltas: <strong>{(singlePrice)}</strong> por clase.
               </li>
             </ul>
             <p className="mt-2">Los pagos pueden realizarse mediante transferencia bancaria o MercadoPago.</p>
