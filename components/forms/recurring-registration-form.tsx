@@ -119,6 +119,8 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
     fetchPrices()
   }, [supabase])
 
+  console.log("monthlyPrice", monthlyPrice)
+
   const availableNonHoliday = useMemo(() => {
     return availableDates.filter((d) => !d.isHoliday)
   }, [availableDates])
@@ -173,7 +175,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
 
       const dates = getMonthDates(weekday, holidayMap)
       setAvailableDates(dates)
-      
+
       // Cargar productos individuales de las clases disponibles
       // Filtrar por fecha, weekday y time usando schedules
       const dateStrings = dates.map(d => d.dateString)
@@ -190,7 +192,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
           .eq("type", "monthly")
           .eq("is_active", true)
           .in("month_label", dateStrings)
-        
+
         if (products && isMounted) {
           const productMap = new Map<string, { id: string; price: number; monthly_price: number | null }>()
           products.forEach(p => {
@@ -207,7 +209,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
           setClassProducts(productMap)
         }
       }
-      
+
       setIsLoading(false)
     }
 
@@ -255,46 +257,6 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
     }
   }
 
-  // Calcular precio promedio mensual de todas las clases disponibles (no solo seleccionadas)
-  const averageMonthlyPrice = useMemo(() => {
-    if (classProducts.size === 0) return monthlyPrice
-    
-    // Usar todas las clases disponibles, no solo las seleccionadas
-    const datesToUse = selectedDates.length > 0 ? selectedDates : availableNonHoliday.map(d => d.dateString)
-    
-    let total = 0
-    let count = 0
-    for (const dateString of datesToUse) {
-      const product = classProducts.get(dateString)
-      if (product) {
-        // Si tiene monthly_price, usarlo; si no, usar price como fallback
-        const priceToUse = product.monthly_price !== null ? product.monthly_price : product.price
-        total += priceToUse
-        count++
-      }
-    }
-    return count > 0 ? total / count : monthlyPrice
-  }, [classProducts, selectedDates, availableNonHoliday, monthlyPrice])
-
-  // Calcular precio promedio individual de todas las clases disponibles (no solo seleccionadas)
-  const averageSinglePrice = useMemo(() => {
-    if (classProducts.size === 0) return singlePrice
-    
-    // Usar todas las clases disponibles, no solo las seleccionadas
-    const datesToUse = selectedDates.length > 0 ? selectedDates : availableNonHoliday.map(d => d.dateString)
-    
-    let total = 0
-    let count = 0
-    for (const dateString of datesToUse) {
-      const product = classProducts.get(dateString)
-      if (product) {
-        total += product.price
-        count++
-      }
-    }
-    return count > 0 ? total / count : singlePrice
-  }, [classProducts, selectedDates, availableNonHoliday, singlePrice])
-
   function calculateTotal(): number {
     // Si hay productos individuales cargados, usar sus precios
     if (classProducts.size > 0) {
@@ -314,7 +276,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
       }
       return total
     }
-    
+
     // Fallback a precios globales si no hay productos individuales
     if (paymentMode === "monthly") {
       return selectedDates.length * monthlyPrice
@@ -323,6 +285,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
   }
 
   function formatPrice(price: number): string {
+
     return price.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 })
   }
 
@@ -944,7 +907,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
                 <Package className="h-5 w-5 text-blue-600" />
                 <h3 className="font-semibold text-lg">Pack mensual completo</h3>
               </div>
-              <p className="text-2xl font-bold text-blue-700">{formatPrice(averageMonthlyPrice)}</p>
+              <p className="text-2xl font-bold text-blue-700">{formatPrice(monthlyPrice)}</p>
               <p className="text-muted-foreground">por clase</p>
               <p className="text-sm text-green-700 mt-2 font-medium">Mejor precio si abonás el mes completo</p>
             </div>
@@ -953,7 +916,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
                 <Ticket className="h-5 w-5 text-blue-600" />
                 <h3 className="font-semibold text-lg">Clases sueltas</h3>
               </div>
-              <p className="text-2xl font-bold text-blue-700">{formatPrice(averageSinglePrice)}</p>
+              <p className="text-2xl font-bold text-blue-700">{formatPrice(singlePrice)}</p>
               <p className="text-muted-foreground">por clase</p>
               <p className="text-sm text-muted-foreground mt-2">Elegí solo las clases que te convengan</p>
             </div>
@@ -1069,7 +1032,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
                       </span>
                     )}
                   </div>
-                  <p className="text-muted-foreground mt-1">{formatPrice(averageMonthlyPrice)} por clase</p>
+                  <p className="text-muted-foreground mt-1">{formatPrice(monthlyPrice)} por clase</p>
                   {!isFullMonth && (
                     <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
                       <Info className="h-4 w-4" />
@@ -1098,7 +1061,7 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold">Clases sueltas</h3>
-                  <p className="text-muted-foreground mt-1">{formatPrice(averageSinglePrice)} por clase</p>
+                  <p className="text-muted-foreground mt-1">{formatPrice(singlePrice)} por clase</p>
                   <p className="text-lg font-semibold text-primary mt-2">
                     Total: {formatPrice(calculateTotal())}
                   </p>
@@ -1165,10 +1128,10 @@ export function RecurringRegistrationForm({ weekday: initialWeekday, time: initi
             <h4 className="font-semibold text-foreground">2. Valores y formas de pago</h4>
             <ul className="list-disc pl-5 space-y-1">
               <li>
-                Pack mensual (todas las clases del mes): <strong>{formatPrice(averageMonthlyPrice)}</strong> por clase.
+                Pack mensual (todas las clases del mes): <strong>{formatPrice(monthlyPrice)}</strong> por clase.
               </li>
               <li>
-                Clases sueltas: <strong>{formatPrice(averageSinglePrice)}</strong> por clase.
+                Clases sueltas: <strong>{formatPrice(singlePrice)}</strong> por clase.
               </li>
             </ul>
             <p className="mt-2">Los pagos pueden realizarse mediante transferencia bancaria o MercadoPago.</p>
