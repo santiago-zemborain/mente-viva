@@ -169,10 +169,14 @@ export default function EventosPage() {
                         )}
                       </div>
                       <Button asChild>
-                        <Link href={`/eventos/${event.id}`}>
+                        <a
+                          href={`https://wa.me/541125790108?text=${encodeURIComponent(`Hola, me interesa el evento ${event.title}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           {"cta" in event && event.cta ? event.cta : event.is_free ? "Inscribirme gratis" : "Inscribirme"}
                           <ArrowRight className="ml-2 h-4 w-4" />
-                        </Link>
+                        </a>
                       </Button>
                     </div>
                   </CardContent>
