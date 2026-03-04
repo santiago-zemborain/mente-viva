@@ -76,6 +76,7 @@ export function Header() {
             width={56}
             height={56}
             className="h-14 w-14"
+            priority
           />
           <span className="text-xl font-bold text-primary">Mente Viva</span>
         </Link>
