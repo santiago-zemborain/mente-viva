@@ -56,7 +56,7 @@ export default function NosotrosPage() {
             <div className="relative flex justify-center">
               <div className="relative h-64 w-64 sm:h-80 sm:w-80">
                 <Image
-                  src="/images/logo-20mente-20viva-20espacio.png"
+                  src="/images/logo.png"
                   alt="Mente Viva"
                   fill
                   className="object-contain"

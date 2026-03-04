@@ -71,7 +71,7 @@ export function Header() {
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-3">
           <Image
-            src="/images/logo-20mente-20viva-20espacio.png"
+            src="/images/logo.png"
             alt="Mente Viva"
             width={56}
             height={56}
@@ -139,7 +139,7 @@ export function Header() {
             <div className="flex flex-col gap-6 pt-6">
               <Link href="/" className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
                 <Image
-                  src="/images/logo-20mente-20viva-20espacio.png"
+                  src="/images/logo.png"
                   alt="Mente Viva"
                   width={48}
                   height={48}

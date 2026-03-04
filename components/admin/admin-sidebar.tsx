@@ -42,7 +42,7 @@ export function AdminSidebar() {
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 border-r bg-card lg:block">
       <div className="flex h-16 items-center gap-3 border-b px-6">
         <Image
-          src="/images/logo-20mente-20viva-20espacio.png"
+          src="/images/logo.png"
           alt="Mente Viva"
           width={40}
           height={40}

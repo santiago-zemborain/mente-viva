@@ -11,6 +11,14 @@ const nunito = Nunito({
   variable: "--font-nunito",
 })
 
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Mente Viva",
+  url: "https://menteviva.com.ar",
+  logo: "https://menteviva.com.ar/images/logo.png",
+}
+
 export const metadata: Metadata = {
   title: {
     default: "Mente Viva - Espacio de Salud Cognitiva",
@@ -29,10 +37,10 @@ export const metadata: Metadata = {
   authors: [{ name: "Mente Viva" }],
   icons: {
     icon: [
-      { url: "/images/logo-20mente-20viva-20espacio.png", type: "image/png" },
+      { url: "/images/logo.png", type: "image/png" },
     ],
     apple: [
-      { url: "/apple-icon.png", type: "image/png" },
+      { url: "/images/logo.png", type: "image/png" },
     ],
   },
   openGraph: {
@@ -44,7 +52,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "https://menteviva.com.ar/images/logo-20mente-20viva-20espacio.png",
+        url: "https://menteviva.com.ar/images/logo.png",
         width: 1563,
         height: 1563,
         alt: "Mente Viva - Espacio de Salud Cognitiva",
@@ -55,7 +63,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Mente Viva - Espacio de Salud Cognitiva",
     description: "Promovemos la salud cognitiva desde una mirada global y humana.",
-    images: ["https://menteviva.com.ar/images/logo-20mente-20viva-20espacio.png"],
+    images: ["https://menteviva.com.ar/images/logo.png"],
   },
 }
 
@@ -75,6 +83,10 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${nunito.className} font-sans antialiased`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
         {children}
         <Analytics />
         <Toaster />

@@ -74,7 +74,7 @@ export default async function HomePage() {
           <div className="flex flex-col items-center">
             <div className="relative h-40 w-full max-w-lg sm:h-64 sm:max-w-xl lg:h-80 lg:max-w-2xl">
               <Image
-                src="/images/logo-20mente-20viva-20espacio.png"
+                src="/images/logo.png"
                 alt="Mente Viva - Espacio de Salud Cognitiva"
                 fill
                 className="object-contain"

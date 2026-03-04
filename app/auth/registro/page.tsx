@@ -73,7 +73,7 @@ export default function RegistroPage() {
         <div className="mb-8 flex justify-center">
           <Link href="/">
             <Image
-              src="/images/logo-20mente-20viva-20espacio.png"
+              src="/images/logo.png"
               alt="Mente Viva"
               width={80}
               height={80}
