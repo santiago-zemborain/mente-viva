@@ -157,12 +157,6 @@ export default async function TallerDeMemoriaPage() {
                   </Link>
                 </Button>
               </div>
-              {/* <p className="mt-3 text-center text-xs text-muted-foreground sm:mt-4 sm:text-sm">
-                Si ya tenés tu entrevista aprobada,{" "}
-                <Link href="/taller-de-memoria/reservar" className="font-medium text-primary hover:underline">
-                  reservá tu clase acá
-                </Link>
-              </p> */}
             </div>
           </div>
         </div>

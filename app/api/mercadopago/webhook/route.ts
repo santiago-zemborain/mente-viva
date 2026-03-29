@@ -20,7 +20,38 @@ const MERCADOPAGO_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN
  * 3. Agrega la URL: https://tu-dominio.com/api/mercadopago/webhook
  */
 export async function POST(request: NextRequest) {
+  const timestamp = new Date().toISOString()
+  const requestId = request.headers.get("x-request-id") || `req-${Date.now()}`
+  
+  // Función helper para logs estructurados
+  const log = (level: "info" | "error" | "warn", message: string, data?: any) => {
+    const logEntry = {
+      timestamp,
+      requestId,
+      level,
+      message: `[Webhook] ${message}`,
+      ...(data && { data }),
+    }
+    
+    // En producción, usar JSON.stringify para mejor visibilidad en Vercel
+    if (process.env.NODE_ENV === "production") {
+      console[level](JSON.stringify(logEntry))
+    } else {
+      console[level](logEntry.message, data || "")
+    }
+  }
+
   try {
+    log("info", "Webhook request received", {
+      url: request.url,
+      method: request.method,
+      headers: {
+        "content-type": request.headers.get("content-type"),
+        "x-signature": request.headers.get("x-signature") ? "present" : "missing",
+        "x-request-id": requestId,
+      },
+    })
+
     // MercadoPago envía los datos como query params O en el body
     // Formato 1: ?type=payment&data.id=123456 (query params)
     // Formato 2: Body JSON con { type: "payment", data: { id: "123456" } }
@@ -32,9 +63,10 @@ export async function POST(request: NextRequest) {
       const contentType = request.headers.get("content-type")
       if (contentType?.includes("application/json")) {
         bodyData = await request.json()
+        log("info", "Body data parsed", { hasBody: true, bodyKeys: Object.keys(bodyData || {}) })
       }
     } catch (e) {
-      // Si no hay body o no es JSON, continuar con query params
+      log("warn", "Failed to parse body", { error: e instanceof Error ? e.message : String(e) })
     }
 
     // Extraer topic/type e id de query params o body
@@ -65,27 +97,27 @@ export async function POST(request: NextRequest) {
     }
 
     if (!topic || !id) {
-      console.error("[Webhook] Missing topic or id", {
+      log("error", "Missing topic or id", {
         topic,
         id,
         queryParams: Object.fromEntries(searchParams.entries()),
         bodyData,
+        url: request.url,
       })
       return NextResponse.json({ error: "Missing parameters" }, { status: 400 })
     }
 
-    console.log(`[Webhook] Received notification: topic=${topic}, id=${id}`)
+    log("info", "Notification parsed", { topic, id })
 
     // Verificar autenticación (opcional pero recomendado)
     // MercadoPago puede enviar un header X-Signature para verificar
     const signature = request.headers.get("x-signature")
-    const requestId = request.headers.get("x-request-id")
 
     // Procesar según el tipo de notificación
     if (topic === "payment" || topic === "merchant_order") {
       // Obtener información del pago desde MercadoPago
       if (!MERCADOPAGO_ACCESS_TOKEN) {
-        console.error("[Webhook] MercadoPago Access Token not configured")
+        log("error", "MercadoPago Access Token not configured")
         return NextResponse.json({ error: "Configuration error" }, { status: 500 })
       }
 
@@ -102,12 +134,13 @@ export async function POST(request: NextRequest) {
         })
 
         if (!paymentResponse.ok) {
-          console.error(`[Webhook] Error fetching payment ${id}:`, await paymentResponse.text())
+          const errorText = await paymentResponse.text()
+          log("error", `Error fetching payment ${id}`, { error: errorText, status: paymentResponse.status })
           return NextResponse.json({ error: "Error fetching payment" }, { status: 500 })
         }
 
         paymentData = await paymentResponse.json()
-        console.log(`[Webhook] Payment data:`, {
+        log("info", "Payment data retrieved", {
           id: paymentData.id,
           status: paymentData.status,
           external_reference: paymentData.external_reference,
@@ -122,12 +155,13 @@ export async function POST(request: NextRequest) {
         })
 
         if (!orderResponse.ok) {
-          console.error(`[Webhook] Error fetching merchant_order ${id}:`, await orderResponse.text())
+          const errorText = await orderResponse.text()
+          log("error", `Error fetching merchant_order ${id}`, { error: errorText, status: orderResponse.status })
           return NextResponse.json({ error: "Error fetching order" }, { status: 500 })
         }
 
         const orderData = await orderResponse.json()
-        console.log(`[Webhook] Order data:`, {
+        log("info", "Order data retrieved", {
           id: orderData.id,
           status: orderData.status,
           preference_id: orderData.preference_id,
@@ -149,7 +183,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (!paymentData) {
-        console.log("[Webhook] No payment data found, skipping update")
+        log("warn", "No payment data found, skipping update")
         return NextResponse.json({ received: true })
       }
 
@@ -172,9 +206,15 @@ export async function POST(request: NextRequest) {
       // El external_reference tiene formato: email-timestamp
       const externalReference = paymentData.external_reference
       if (!externalReference) {
-        console.error("[Webhook] No external_reference found in payment")
+        log("error", "No external_reference found in payment", { paymentId: paymentData.id })
         return NextResponse.json({ received: true, warning: "No external_reference" })
       }
+
+      log("info", "Processing payment", {
+        paymentId: paymentData.id,
+        status: paymentData.status,
+        external_reference: externalReference,
+      })
 
       // Usar service role key para bypassar RLS (necesario para webhooks)
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -185,19 +225,19 @@ export async function POST(request: NextRequest) {
       // El formato es: email-timestamp, así que extraemos el email
       const emailMatch = externalReference.match(/^([^-]+)-/)
       if (!emailMatch) {
-        console.error("[Webhook] Invalid external_reference format:", externalReference)
+        log("error", "Invalid external_reference format", { external_reference: externalReference })
         return NextResponse.json({ received: true, warning: "Invalid external_reference format" })
       }
 
       const email = emailMatch[1]
-      console.log(`[Webhook] Searching for reservations with email: ${email}`)
+      log("info", "Searching for reservations", { email, external_reference: externalReference })
 
       let reservations: any[] = []
       let reservationError: any = null
 
       // Estrategia 1: Buscar TODAS las reservas con ese email (sin filtros de status)
       // Esto es lo más directo y debería encontrar las reservas que tienen payment_id
-      console.log(`[Webhook] Strategy 1: Searching all reservations with email (any status)...`)
+      log("info", "Strategy 1: Searching all reservations with email (any status)")
       const { data: allReservations, error: allError } = await supabase
         .from("reservations")
         .select("id, product_id, guest_email, user_id, payment_id, status, created_at")
@@ -205,7 +245,7 @@ export async function POST(request: NextRequest) {
         .order("created_at", { ascending: false })
         .limit(20)
 
-      console.log(`[Webhook] Strategy 1 result:`, {
+      log("info", "Strategy 1 result", {
         found: allReservations?.length || 0,
         error: allError?.message,
         reservations: allReservations?.map((r: any) => ({
@@ -217,12 +257,6 @@ export async function POST(request: NextRequest) {
         })),
       })
 
-      if (allReservations) {
-        for (const reservation of allReservations) {
-          console.log("RESERVATION", reservation);
-        }
-      }
-
       if (!allError && allReservations && allReservations.length > 0) {
         // Priorizar las que tienen payment_id y son recientes (últimas 2 horas)
         const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
@@ -232,19 +266,19 @@ export async function POST(request: NextRequest) {
 
         if (recentWithPayment.length > 0) {
           reservations = recentWithPayment
-          console.log(`[Webhook] Found ${reservations.length} recent reservations with payment_id`)
+          log("info", `Found ${reservations.length} recent reservations with payment_id`)
         } else {
           // Si no hay recientes con payment_id, usar todas las que tienen payment_id
           const withPayment = allReservations.filter((r: any) => r.payment_id)
           if (withPayment.length > 0) {
             reservations = withPayment
-            console.log(`[Webhook] Found ${reservations.length} reservations with payment_id`)
+            log("info", `Found ${reservations.length} reservations with payment_id`)
           } else {
             // Si no tienen payment_id, usar las que tienen status pending_payment
             const pending = allReservations.filter((r: any) => r.status === "pending_payment")
             if (pending.length > 0) {
               reservations = pending
-              console.log(`[Webhook] Found ${reservations.length} reservations with status pending_payment`)
+              log("info", `Found ${reservations.length} reservations with status pending_payment`)
             }
           }
         }
@@ -254,14 +288,14 @@ export async function POST(request: NextRequest) {
 
       // Estrategia 2: Si no encontramos por guest_email, buscar por user_id (usuario autenticado)
       if (reservations.length === 0) {
-        console.log(`[Webhook] Strategy 2: Trying to find reservations by user_id...`)
+        log("info", "Strategy 2: Trying to find reservations by user_id")
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("id")
           .eq("email", email)
           .single()
 
-        console.log(`[Webhook] Profile lookup:`, { found: !!profile, error: profileError?.message })
+        log("info", "Profile lookup", { found: !!profile, error: profileError?.message })
 
         if (profile) {
           const { data: userReservations, error: userReservationError } = await supabase
@@ -271,7 +305,7 @@ export async function POST(request: NextRequest) {
             .order("created_at", { ascending: false })
             .limit(20)
 
-          console.log(`[Webhook] Strategy 2 result:`, {
+          log("info", "Strategy 2 result", {
             found: userReservations?.length || 0,
             error: userReservationError?.message,
           })
@@ -281,13 +315,13 @@ export async function POST(request: NextRequest) {
             const withPayment = userReservations.filter((r: any) => r.payment_id)
             if (withPayment.length > 0) {
               reservations = withPayment
-              console.log(`[Webhook] Found ${reservations.length} reservations by user_id with payment_id`)
+              log("info", `Found ${reservations.length} reservations by user_id with payment_id`)
             } else {
               // Si no tienen payment_id, usar las que tienen status pending_payment
               const pending = userReservations.filter((r: any) => r.status === "pending_payment")
               if (pending.length > 0) {
                 reservations = pending
-                console.log(`[Webhook] Found ${reservations.length} reservations by user_id with status pending_payment`)
+                log("info", `Found ${reservations.length} reservations by user_id with status pending_payment`)
               }
             }
             reservationError = null
@@ -298,13 +332,18 @@ export async function POST(request: NextRequest) {
       }
 
       if (reservations.length === 0) {
-        console.error("[Webhook] No reservations found for email:", email, reservationError)
-        console.error("[Webhook] External reference:", externalReference)
+        log("error", "No reservations found", {
+          email,
+          external_reference: externalReference,
+          reservationError: reservationError?.message,
+        })
         // Retornamos success para que MercadoPago no reintente infinitamente
         return NextResponse.json({ received: true, warning: "No reservations found" })
       }
 
-      console.log(`[Webhook] Found ${reservations.length} reservation(s) to process`)
+      log("info", `Found ${reservations.length} reservation(s) to process`, {
+        reservationIds: reservations.map((r: any) => r.id),
+      })
 
       // Buscar el pago asociado usando payment_id de las reservas
       // Primero intentar obtener el payment_id de la primera reserva
@@ -342,9 +381,19 @@ export async function POST(request: NextRequest) {
       }
 
       if (paymentError || !payment) {
-        console.error("[Webhook] Payment not found:", paymentError)
+        log("error", "Payment not found", {
+          paymentError: paymentError?.message,
+          reservationId: firstReservation.id,
+          paymentId: firstReservation.payment_id,
+        })
         return NextResponse.json({ received: true, warning: "Payment not found" })
       }
+
+      log("info", "Payment found in database", {
+        paymentId: payment.id,
+        currentStatus: payment.status,
+        newStatus,
+      })
 
       // Actualizar el estado del pago
       const updateData: {
@@ -363,9 +412,15 @@ export async function POST(request: NextRequest) {
       const { error: updateError } = await supabase.from("payments").update(updateData).eq("id", payment.id)
 
       if (updateError) {
-        console.error("[Webhook] Error updating payment:", updateError)
+        log("error", "Error updating payment", { updateError: updateError.message, paymentId: payment.id })
         return NextResponse.json({ error: "Error updating payment" }, { status: 500 })
       }
+
+      log("info", "Payment updated successfully", {
+        paymentId: payment.id,
+        newStatus,
+        updateData,
+      })
 
       // Si el pago fue confirmado, actualizar el estado de TODAS las reservas
       if (newStatus === "confirmed") {
@@ -376,27 +431,48 @@ export async function POST(request: NextRequest) {
           .in("id", reservationIds)
 
         if (updateReservationsError) {
-          console.error("[Webhook] Error updating reservations:", updateReservationsError)
+          log("error", "Error updating reservations", {
+            updateReservationsError: updateReservationsError.message,
+            reservationIds,
+          })
           return NextResponse.json({ error: "Error updating reservations" }, { status: 500 })
         }
 
-        console.log(`[Webhook] Payment ${payment.id} and ${reservations.length} reservations updated to confirmed`)
+        log("info", "Payment and reservations confirmed", {
+          paymentId: payment.id,
+          reservationCount: reservations.length,
+          reservationIds,
+        })
       } else if (newStatus === "rejected") {
         // Si fue rechazado, mantener pending_payment o cambiar a cancelled según tu lógica
         // Por ahora, lo dejamos como pending_payment para que el admin pueda revisar
-        console.log(`[Webhook] Payment ${payment.id} rejected, keeping ${reservations.length} reservations as pending_payment`)
+        log("warn", "Payment rejected", {
+          paymentId: payment.id,
+          reservationCount: reservations.length,
+        })
       }
 
-      console.log(`[Webhook] Payment ${payment.id} updated to status: ${newStatus}, affecting ${reservations.length} reservation(s)`)
+      log("info", "Webhook processing completed", {
+        paymentId: payment.id,
+        status: newStatus,
+        reservationsAffected: reservations.length,
+      })
 
       return NextResponse.json({ received: true, updated: true, payment_id: payment.id, status: newStatus })
     }
 
     // Para otros tipos de notificaciones, solo confirmamos recepción
-    console.log(`[Webhook] Notification type ${topic} received but not processed`)
+    log("info", `Notification type ${topic} received but not processed`)
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("[Webhook] Error processing webhook:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
+    log("error", "Error processing webhook", {
+      error: errorMessage,
+      stack: errorStack,
+    })
+    
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
